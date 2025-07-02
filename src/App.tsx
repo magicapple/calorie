@@ -4,6 +4,7 @@ import PersonalProfile from './components/PersonalProfile'
 import MyPantry from './components/MyPantry'
 import DailyMealLogger from './components/DailyMealLogger'
 import Dashboard from './components/Dashboard'
+import FoodDatabaseViewer from './components/FoodDatabaseViewer'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // Default to dashboard
@@ -18,6 +19,8 @@ function App() {
         return <MyPantry />;
       case 'logger':
         return <DailyMealLogger />;
+      case 'foodDatabase':
+        return <FoodDatabaseViewer />;
       default:
         return <Dashboard />;
     }
@@ -49,6 +52,12 @@ function App() {
           className={`px-4 py-2 rounded-md ${activeTab === 'logger' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
         >
           饮食记录
+        </button>
+        <button
+          onClick={() => setActiveTab('foodDatabase')}
+          className={`px-4 py-2 rounded-md ${activeTab === 'foodDatabase' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+        >
+          食材数据库
         </button>
       </nav>
       <div className="mt-4">

@@ -1,54 +1,86 @@
 import React, { useState } from 'react';
 import { foodDatabase } from '../data/foodDatabase';
-import type { FoodItem } from '../types';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const FoodDatabaseViewer: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredFoods, setFilteredFoods] = useState<FoodItem[]>(foodDatabase);
+  const [selectedCategory, setSelectedCategory] = useState('所有类别');
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const term = e.target.value;
-    setSearchTerm(term);
-    if (term === '') {
-      setFilteredFoods(foodDatabase);
-    } else {
-      setFilteredFoods(
-        foodDatabase.filter(food =>
-          food.name.toLowerCase().includes(term.toLowerCase())
-        )
-      );
-    }
-  };
+  const foodCategories = ['所有类别', ...new Set(foodDatabase.map(food => food.category))];
+
+  const filteredFoodDatabase = foodDatabase.filter(food => {
+    const matchesSearchTerm = food.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === '所有类别' || food.category === selectedCategory;
+    return matchesSearchTerm && matchesCategory;
+  });
 
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-xl font-semibold">食物营养数据库</h2>
-      <input
-        type="text"
-        placeholder="搜索食物..."
-        value={searchTerm}
-        onChange={handleSearch}
-        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-      />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFoods.map(food => (
-          <div key={food.id} className="border rounded-lg p-4 shadow-sm">
-            <h3 className="text-lg font-medium">{food.name}</h3>
-            <p className="text-sm text-gray-600">分类: {food.category}</p>
-            <p className="text-sm text-gray-600">默认单位: {food.default_unit} ({food.grams_per_unit}g)</p>
-            <p className="text-sm text-gray-600">热量: {food.calories} kcal/100g</p>
-            <p className="text-sm text-gray-600">蛋白质: {food.protein}g/100g</p>
-            <p className="text-sm text-gray-600">碳水: {food.carbohydrate}g/100g</p>
-            <p className="text-sm text-gray-600">脂肪: {food.fat}g/100g</p>
-            {food.is_anti_inflammatory && (
-              <p className="text-sm text-green-600">抗炎食物</p>
-            )}
-            {food.anti_inflammatory_compounds.length > 0 && (
-              <p className="text-sm text-green-600">抗炎成分: {food.anti_inflammatory_compounds.join(', ')}</p>
-            )}
-          </div>
-        ))}
+      <h2 className="text-2xl font-bold text-center">食材数据库</h2>
+
+      <div className="flex flex-col md:flex-row gap-4">
+        <Input
+          type="text"
+          placeholder="搜索食材..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-grow"
+        />
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="p-2 border rounded-md"
+        >
+          {foodCategories.map(category => (
+            <option key={category} value={category}>{category}</option>
+          ))}
+        </select>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>所有食材</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>名称</TableHead>
+                  <TableHead>类别</TableHead>
+                  <TableHead>卡路里 (kcal)</TableHead>
+                  <TableHead>蛋白质 (g)</TableHead>
+                  <TableHead>碳水 (g)</TableHead>
+                  <TableHead>脂肪 (g)</TableHead>
+                  <TableHead>抗炎</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredFoodDatabase.map(food => (
+                  <TableRow key={food.id}>
+                    <TableCell className="font-medium">{food.name}</TableCell>
+                    <TableCell>{food.category}</TableCell>
+                    <TableCell>{food.calories.toFixed(0)}</TableCell>
+                    <TableCell>{food.protein.toFixed(1)}</TableCell>
+                    <TableCell>{food.carbohydrate.toFixed(1)}</TableCell>
+                    <TableCell>{food.fat.toFixed(1)}</TableCell>
+                    <TableCell>{food.is_anti_inflammatory ? '是' : '否'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

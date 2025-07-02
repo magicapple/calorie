@@ -1,24 +1,67 @@
 import React, { useState, useEffect } from "react";
+import { addData, getData, updateData } from '../lib/indexedDB';
+import { format } from "date-fns";
 import type { PersonalProfileData } from "../types";
 
 const PersonalProfile: React.FC = () => {
-  const [profile, setProfile] = useState<PersonalProfileData>(() => {
-    const savedProfile = localStorage.getItem("personalProfile");
-    return savedProfile
-      ? JSON.parse(savedProfile)
-      : {
-          gender: "",
-          age: "",
-          height: "",
-          weight: "",
-          bodyFatPercentage: "",
-          bmr: "",
-          activeCalories: "",
-        };
+  const [profile, setProfile] = useState<PersonalProfileData>({
+    gender: "",
+    age: "",
+    height: "",
+    weight: "",
+    bodyFatPercentage: "",
+    bmr: "",
+    activeCalories: "",
   });
 
   useEffect(() => {
-    localStorage.setItem("personalProfile", JSON.stringify(profile));
+    const loadProfile = async () => {
+      try {
+        const savedProfile = await getData<PersonalProfileData>("currentProfile", "currentProfile");
+        if (savedProfile) {
+          setProfile(savedProfile);
+        } else {
+          // Migration from localStorage
+          const localStorageProfile = localStorage.getItem("personalProfile");
+          if (localStorageProfile) {
+            const parsedProfile = JSON.parse(localStorageProfile);
+            setProfile(parsedProfile);
+            await updateData("currentProfile", { id: "currentProfile", ...parsedProfile });
+            await addData("profileHistory", {
+              timestamp: Date.now(),
+              date: format(new Date(), "yyyy-MM-dd"),
+              profileData: parsedProfile,
+            });
+            localStorage.removeItem("personalProfile"); // Clean up localStorage
+          }
+        }
+      } catch (error) {
+        console.error("Error loading profile from IndexedDB:", error);
+      }
+    };
+    loadProfile();
+  }, []);
+
+  useEffect(() => {
+    const saveProfile = async () => {
+      try {
+        // Save current profile
+        await updateData("currentProfile", { id: "currentProfile", ...profile });
+
+        // Save profile history
+        await addData("profileHistory", {
+          timestamp: Date.now(),
+          date: format(new Date(), "yyyy-MM-dd"),
+          profileData: profile,
+        });
+      } catch (error) {
+        console.error("Error saving profile to IndexedDB:", error);
+      }
+    };
+    // Only save if profile data is not empty (to avoid saving initial empty state)
+    if (profile.gender !== "" || profile.age !== "" || profile.height !== "" || profile.weight !== "" || profile.bodyFatPercentage !== "" || profile.bmr !== "" || profile.activeCalories !== "") {
+      saveProfile();
+    }
   }, [profile]);
 
   const handleChange = (

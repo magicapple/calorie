@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { addData, getAllData, updateData, deleteData } from '../lib/indexedDB';
 import { foodDatabase } from "../data/foodDatabase";
 import type { FoodItem, PantryBatch } from "../types";
 import { Input } from "@/components/ui/input";
@@ -9,16 +10,34 @@ const MyPantry: React.FC = () => {
   const [inputWeight, setInputWeight] = useState<number | "">(""); // New state for total weight
   const [inputUnit, setInputUnit] = useState<"grams" | "units">("grams");
   const [selectedCategory, setSelectedCategory] = useState<string>("所有类别"); // New state for selected category
-  const [pantry, setPantry] = useState<PantryBatch[]>(() => {
-    const savedPantry = localStorage.getItem("myPantry");
-    return savedPantry ? JSON.parse(savedPantry) : [];
-  });
+  const [pantry, setPantry] = useState<PantryBatch[]>([]);
 
   const foodCategories = ["所有类别", ...new Set(foodDatabase.map(food => food.category))];
 
   useEffect(() => {
-    localStorage.setItem("myPantry", JSON.stringify(pantry));
-  }, [pantry]);
+    const loadPantry = async () => {
+      try {
+        const savedPantry = await getAllData<PantryBatch>("pantryBatches");
+        if (savedPantry.length > 0) {
+          setPantry(savedPantry);
+        } else {
+          // Migration from localStorage
+          const localStoragePantry = localStorage.getItem("myPantry");
+          if (localStoragePantry) {
+            const parsedPantry: PantryBatch[] = JSON.parse(localStoragePantry);
+            for (const batch of parsedPantry) {
+              await addData("pantryBatches", batch);
+            }
+            setPantry(parsedPantry);
+            localStorage.removeItem("myPantry"); // Clean up localStorage
+          }
+        }
+      } catch (error) {
+        console.error("Error loading pantry from IndexedDB:", error);
+      }
+    };
+    loadPantry();
+  }, []);
 
   const filteredFoods = React.useMemo(() => {
     let foods = foodDatabase;
@@ -30,7 +49,7 @@ const MyPantry: React.FC = () => {
     return foods;
   }, [selectedCategory]);
 
-  const handleAddFoodToPantry = () => {
+  const handleAddFoodToPantry = async () => {
     if (!selectedFood || inputQuantity === "") return;
 
     const quantity = Number(inputQuantity);
@@ -73,39 +92,53 @@ const MyPantry: React.FC = () => {
       spoiledWeightInGrams: 0,
     };
 
-    setPantry((prevPantry) => {
-      // 这里简化处理，每次都添加新批次，不合并
-      return [...prevPantry, newBatch];
-    });
-
-    
-    setSelectedFood(null);
-    setInputQuantity("");
+    try {
+      await addData("pantryBatches", newBatch);
+      setPantry((prevPantry) => [...prevPantry, newBatch]);
+      setSelectedFood(null);
+      setInputQuantity("");
+      setInputWeight("");
+      setInputUnit("grams"); // Reset unit to default
+    } catch (error) {
+      console.error("Error adding food to pantry:", error);
+      alert("添加入库失败！");
+    }
   };
 
-  const handleRemoveFromPantry = (batchId: string) => {
-    setPantry((prevPantry) =>
-      prevPantry.filter((batch) => batch.id !== batchId)
-    );
+  const handleRemoveFromPantry = async (batchId: string) => {
+    try {
+      await deleteData("pantryBatches", batchId);
+      setPantry((prevPantry) => prevPantry.filter((batch) => batch.id !== batchId));
+    } catch (error) {
+      console.error("Error removing from pantry:", error);
+      alert("移除失败！");
+    }
   };
 
-  const handleSpoilFood = (batchId: string, spoiledUnits: number) => {
-    setPantry((prevPantry) =>
-      prevPantry.map((batch) => {
-        if (batch.id === batchId) {
-          const actualSpoiledUnits = Math.min(spoiledUnits, batch.remainingQuantityInUnits);
-          const spoiledGrams = actualSpoiledUnits * batch.calculatedGramsPerUnit;
-          return {
-            ...batch,
-            remainingQuantityInUnits: batch.remainingQuantityInUnits - actualSpoiledUnits,
-            remainingWeightInGrams: batch.remainingWeightInGrams - spoiledGrams,
-            spoiledQuantityInUnits: batch.spoiledQuantityInUnits + actualSpoiledUnits,
-            spoiledWeightInGrams: batch.spoiledWeightInGrams + spoiledGrams,
-          };
-        }
-        return batch;
-      })
-    );
+  const handleSpoilFood = async (batchId: string, spoiledUnits: number) => {
+    try {
+      setPantry((prevPantry) =>
+        prevPantry.map((batch) => {
+          if (batch.id === batchId) {
+            const actualSpoiledUnits = Math.min(spoiledUnits, batch.remainingQuantityInUnits);
+            const spoiledGrams = actualSpoiledUnits * batch.calculatedGramsPerUnit;
+            const updatedBatch = {
+              ...batch,
+              remainingQuantityInUnits: batch.remainingQuantityInUnits - actualSpoiledUnits,
+              remainingWeightInGrams: batch.remainingWeightInGrams - spoiledGrams,
+              spoiledQuantityInUnits: batch.spoiledQuantityInUnits + actualSpoiledUnits,
+              spoiledWeightInGrams: batch.spoiledWeightInGrams + spoiledGrams,
+            };
+            updateData("pantryBatches", updatedBatch); // Update in IndexedDB
+            return updatedBatch;
+          }
+          return batch;
+        })
+      );
+    } catch (error) {
+      console.error("Error spoiling food:", error);
+      alert("标记变质失败！");
+    }
   };
 
   return (

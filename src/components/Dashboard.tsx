@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getData, getByIndex } from '../lib/indexedDB';
 import type { PersonalProfileData } from '../types';
 import type { MealEntry } from '../types';
 import { calculateBMR, calculateTotalIntake, calculateMacronutrientRatios, checkProteinTarget, calculateAntiInflammatoryScore } from '../utils/calculations';
@@ -17,17 +18,36 @@ const Dashboard: React.FC = () => {
   const [dailyMeals, setDailyMeals] = useState<MealEntry[]>([]);
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem('personalProfile');
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile));
-    }
-    const dateString = format(selectedDate, "yyyy-MM-dd");
-    const savedMeals = localStorage.getItem(`dailyMeals_${dateString}`);
-    if (savedMeals) {
-      setDailyMeals(JSON.parse(savedMeals));
-    } else {
-      setDailyMeals([]);
-    }
+    const loadData = async () => {
+      try {
+        // Load profile data
+        const savedProfile = await getData<PersonalProfileData>("currentProfile", "currentProfile");
+        if (savedProfile) {
+          setProfile(savedProfile);
+        }
+
+        // Load daily meals for selected date
+        const dateString = format(selectedDate, "yyyy-MM-dd");
+        const meals = await getByIndex<MealEntry>("mealEntries", "dateIndex", dateString);
+        setDailyMeals(meals);
+
+        // --- Migration from localStorage (Daily Meals) ---
+        const localStorageDailyMealsKey = `dailyMeals_${dateString}`;
+        const localStorageDailyMeals = localStorage.getItem(localStorageDailyMealsKey);
+        if (localStorageDailyMeals) {
+          const parsedMeals: MealEntry[] = JSON.parse(localStorageDailyMeals);
+          for (const meal of parsedMeals) {
+            await addData("mealEntries", meal);
+          }
+          setDailyMeals(parsedMeals);
+          localStorage.removeItem(localStorageDailyMealsKey);
+        }
+
+      } catch (error) {
+        console.error("Error loading data from IndexedDB:", error);
+      }
+    };
+    loadData();
   }, [selectedDate]);
 
   const totalIntake = calculateTotalIntake(dailyMeals);

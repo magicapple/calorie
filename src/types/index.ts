@@ -2,7 +2,7 @@ export interface FoodItem {
   id: string;
   name: string;
   default_unit: string;
-  grams_per_unit: number;
+  
   category: string;
   calories: number;
   protein: number;
@@ -46,6 +46,21 @@ export interface PantryBatch {
   consumedWeightInGrams: number;   // 已消耗（吃掉）的总重量（克）
   spoiledQuantityInUnits: number;  // 已变质（扔掉）的数量（单位）
   spoiledWeightInGrams: number;    // 已变质（扔掉）的总重量（克）
+}
+
+export interface PersonalProfileHistoryEntry {
+  timestamp: number; // 档案更新时的 Unix 时间戳
+  date: string;      // 档案更新时的日期 (YYYY-MM-DD 格式)
+  profileData: PersonalProfileData; // 当时的个人档案数据
+}
+
+export interface RecentFoodEntry {
+  id: string; // 唯一ID，例如 `${mealType}_${foodId}` 或一个时间戳
+  mealType: "breakfast" | "lunch" | "dinner" | "snack";
+  foodId: string;
+  quantity: number; // 最近使用的数量
+  unit: "grams" | "units"; // 最近使用的单位
+  lastUsed: number; // 最近使用的时间戳
 }
 
 export const __type_exports = {};
