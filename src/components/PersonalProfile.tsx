@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button"; // Import Button
 import { addData, getData, updateData } from '../lib/indexedDB';
 import { format } from "date-fns";
-import type { PersonalProfileData } from "../types";
+import type { PersonalProfileData, PersonalProfileHistoryEntry } from "../types";
 
 const PersonalProfile: React.FC = () => {
   const [profile, setProfile] = useState<PersonalProfileData>({
@@ -27,11 +28,7 @@ const PersonalProfile: React.FC = () => {
             const parsedProfile = JSON.parse(localStorageProfile);
             setProfile(parsedProfile);
             await updateData("currentProfile", { id: "currentProfile", ...parsedProfile });
-            await addData("profileHistory", {
-              timestamp: Date.now(),
-              date: format(new Date(), "yyyy-MM-dd"),
-              profileData: parsedProfile,
-            });
+            // No longer automatically add to profileHistory during initial load migration
             localStorage.removeItem("personalProfile"); // Clean up localStorage
           }
         }
@@ -42,26 +39,20 @@ const PersonalProfile: React.FC = () => {
     loadProfile();
   }, []);
 
+  // This useEffect now only saves the current profile, not history
   useEffect(() => {
-    const saveProfile = async () => {
+    const saveCurrentProfile = async () => {
       try {
-        // Save current profile
-        await updateData("currentProfile", { id: "currentProfile", ...profile });
-
-        // Save profile history
-        await addData("profileHistory", {
-          timestamp: Date.now(),
-          date: format(new Date(), "yyyy-MM-dd"),
-          profileData: profile,
-        });
+        // Only save if profile data is not empty (to avoid saving initial empty state)
+        if (profile.gender !== "" || profile.age !== "" || profile.height !== "" || profile.weight !== "" || profile.bodyFatPercentage !== "" || profile.bmr !== "" || profile.activeCalories !== "") {
+          await updateData("currentProfile", { id: "currentProfile", ...profile });
+          console.log("Current profile saved.");
+        }
       } catch (error) {
-        console.error("Error saving profile to IndexedDB:", error);
+        console.error("Error saving current profile to IndexedDB:", error);
       }
     };
-    // Only save if profile data is not empty (to avoid saving initial empty state)
-    if (profile.gender !== "" || profile.age !== "" || profile.height !== "" || profile.weight !== "" || profile.bodyFatPercentage !== "" || profile.bmr !== "" || profile.activeCalories !== "") {
-      saveProfile();
-    }
+    saveCurrentProfile();
   }, [profile]);
 
   const handleChange = (
@@ -72,6 +63,24 @@ const PersonalProfile: React.FC = () => {
       ...prevProfile,
       [name]: value === "" ? "" : name === "gender" ? value : Number(value),
     }));
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const timestamp = Date.now();
+      const date = format(new Date(), "yyyy-MM-dd");
+      const newHistoryEntry: PersonalProfileHistoryEntry = {
+        timestamp,
+        date,
+        profileData: { ...profile }, // Save a copy of the current profile data
+      };
+      await addData("profileHistory", newHistoryEntry);
+      alert("个人档案历史记录保存成功！");
+      console.log("Profile history saved:", newHistoryEntry);
+    } catch (error) {
+      console.error("Error saving profile history:", error);
+      alert("保存个人档案历史记录失败！");
+    }
   };
 
   return (
@@ -200,6 +209,9 @@ const PersonalProfile: React.FC = () => {
           />
         </div>
       </div>
+      <Button onClick={handleSaveProfile} className="w-full mt-4">
+        保存当前档案到历史记录
+      </Button>
     </div>
   );
 };
