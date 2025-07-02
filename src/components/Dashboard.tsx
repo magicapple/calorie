@@ -4,6 +4,7 @@ import type { PersonalProfileData } from '../types';
 import type { MealEntry } from '../types';
 import { calculateBMR, calculateTotalIntake, calculateMacronutrientRatios, checkProteinTarget, calculateAntiInflammatoryScore } from '../utils/calculations';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import LiquidFillGauge from "@/components/ui/liquid-fill-gauge";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { format } from "date-fns";
@@ -71,6 +72,23 @@ const Dashboard: React.FC = () => {
   const totalExpenditure = bmr + (profile?.activeCalories ? Number(profile.activeCalories) : 0);
   const energyBalance = totalIntake.calories - totalExpenditure;
 
+  // Calculate fill percentage for LiquidFillGauge
+  const maxDeviation = 500; // Max expected deviation for full/empty gauge
+  let fillPercentage = 50; // 50% for balanced
+  let liquidColor = 'var(--primary-green)'; // Default for balanced
+
+  if (energyBalance > 0) {
+    // Energy surplus
+    fillPercentage = 50 + (energyBalance / maxDeviation) * 50;
+    if (fillPercentage > 100) fillPercentage = 100;
+    liquidColor = 'var(--accent-pink)'; // Red for surplus
+  } else if (energyBalance < 0) {
+    // Energy deficit
+    fillPercentage = 50 + (energyBalance / maxDeviation) * 50; // energyBalance is negative
+    if (fillPercentage < 0) fillPercentage = 0;
+    liquidColor = 'var(--accent-blue)'; // Blue for deficit
+  }
+
   const macronutrientRatios = calculateMacronutrientRatios(
     totalIntake.protein,
     totalIntake.carbohydrate,
@@ -120,29 +138,26 @@ const Dashboard: React.FC = () => {
         <CardHeader>
           <CardTitle>能量平衡</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <p>总摄入: <span className="font-medium">{totalIntake.calories.toFixed(0)} kcal</span></p>
-          <p>静息消耗 (BMR): <span className="font-medium">{bmr.toFixed(0)} kcal</span></p>
-          <p>运动消耗: <span className="font-medium">{profile?.activeCalories || 0} kcal</span></p>
-          <p>总消耗: <span className="font-medium">{totalExpenditure.toFixed(0)} kcal</span></p>
-          <p className={`text-xl font-bold ${energyBalance > 0 ? 'text-red-500' : 'text-green-500'}`}>
-            能量净值: {energyBalance.toFixed(0)} kcal
-          </p>
-          {energyBalance > 0 && <p className="text-sm text-red-500">建议: 减少热量摄入或增加运动。</p>}
-          {energyBalance < 0 && <p className="text-sm text-green-500">建议: 保持良好平衡。</p>}
-          {energyBalance === 0 && <p className="text-sm text-gray-500">建议: 能量摄入与消耗平衡。</p>}
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={[
-              { name: '总摄入', value: totalIntake.calories },
-              { name: '总消耗', value: totalExpenditure },
-            ]}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="value" fill="var(--primary-green)" />
-            </BarChart>
-          </ResponsiveContainer>
+        <CardContent className="flex flex-col md:flex-row items-center md:items-start justify-between space-y-4 md:space-y-0 md:space-x-4">
+          <div className="space-y-2 w-full md:w-1/2">
+            <p>总摄入: <span className="font-medium">{totalIntake.calories.toFixed(0)} kcal</span></p>
+            <p>静息消耗 (BMR): <span className="font-medium">{bmr.toFixed(0)} kcal</span></p>
+            <p>运动消耗: <span className="font-medium">{profile?.activeCalories || 0} kcal</span></p>
+            <p>总消耗: <span className="font-medium">{totalExpenditure.toFixed(0)} kcal</span></p>
+            <p className={`text-xl font-bold ${energyBalance > 0 ? 'text-red-500' : 'text-green-500'}`}>
+              能量净值: {energyBalance.toFixed(0)} kcal
+            </p>
+            {energyBalance > 0 && <p className="text-sm text-red-500">建议: 减少热量摄入或增加运动。</p>}
+            {energyBalance < 0 && <p className="text-sm text-green-500">建议: 保持良好平衡。</p>}
+            {energyBalance === 0 && <p className="text-sm text-gray-500">建议: 能量摄入与消耗平衡。</p>}
+          </div>
+          <div className="w-full md:w-1/2 h-48 relative flex items-center justify-center">
+            <LiquidFillGauge
+              value={fillPercentage}
+              centerText={`${energyBalance.toFixed(0)} kcal`}
+              liquidColor={liquidColor}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -151,25 +166,29 @@ const Dashboard: React.FC = () => {
         <CardHeader>
           <CardTitle>宏量营养素分析</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <p>蛋白质: <span className="font-medium">{totalIntake.protein.toFixed(1)} g</span> ({macronutrientRatios.proteinRatio.toFixed(1)}%)</p>
-          <p>碳水化合物: <span className="font-medium">{totalIntake.carbohydrate.toFixed(1)} g</span> ({macronutrientRatios.carbohydrateRatio.toFixed(1)}%)</p>
-          <p>脂肪: <span className="font-medium">{totalIntake.fat.toFixed(1)} g</span> ({macronutrientRatios.fatRatio.toFixed(1)}%)</p>
-          <p>蛋白质摄入: {proteinTargetStatus.status} (目标: {proteinTargetStatus.target.toFixed(1)} g/kg)</p>
-          {proteinTargetStatus.status === '未达标' && <p className="text-sm text-red-500">建议: 增加蛋白质摄入。</p>}
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={[
-              { name: '蛋白质', value: totalIntake.protein * 4 },
-              { name: '碳水化合物', value: totalIntake.carbohydrate * 4 },
-              { name: '脂肪', value: totalIntake.fat * 9 },
-            ]}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="value" fill="var(--accent-blue)" />
-            </BarChart>
-          </ResponsiveContainer>
+        <CardContent className="flex flex-col md:flex-row items-center md:items-start justify-between space-y-4 md:space-y-0 md:space-x-4">
+          <div className="space-y-2 w-full md:w-1/2">
+            <p>蛋白质: <span className="font-medium">{totalIntake.protein.toFixed(1)} g</span> ({macronutrientRatios.proteinRatio.toFixed(1)}%)</p>
+            <p>碳水化合物: <span className="font-medium">{totalIntake.carbohydrate.toFixed(1)} g</span> ({macronutrientRatios.carbohydrateRatio.toFixed(1)}%)</p>
+            <p>脂肪: <span className="font-medium">{totalIntake.fat.toFixed(1)} g</span> ({macronutrientRatios.fatRatio.toFixed(1)}%)</p>
+            <p>蛋白质摄入: {proteinTargetStatus.status} (目标: {proteinTargetStatus.target.toFixed(1)} g/kg)</p>
+            {proteinTargetStatus.status === '未达标' && <p className="text-sm text-red-500">建议: 增加蛋白质摄入。</p>}
+          </div>
+          <div className="w-full md:w-1/2 h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={[
+                { name: '蛋白质', value: totalIntake.protein * 4 },
+                { name: '碳水化合物', value: totalIntake.carbohydrate * 4 },
+                { name: '脂肪', value: totalIntake.fat * 9 },
+              ]}>
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="var(--accent-blue)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
 
@@ -178,31 +197,35 @@ const Dashboard: React.FC = () => {
         <CardHeader>
           <CardTitle>抗炎饮食追踪</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <p>抗炎食物占比: <span className="font-medium">{antiInflammatoryScore.toFixed(1)}%</span></p>
-          {antiInflammatoryScore < 50 && <p className="text-sm text-red-500">建议: 增加抗炎食物摄入。</p>}
-          {antiInflammatoryScore >= 50 && <p className="text-sm text-green-500">建议: 保持良好的抗炎饮食。</p>}
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: '抗炎食物', value: antiInflammatoryScore },
-                  { name: '非抗炎食物', value: 100 - antiInflammatoryScore },
-                ]}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                <Cell key="cell-0" fill="var(--primary-green)" />
-                <Cell key="cell-1" fill="var(--accent-pink)" />
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+        <CardContent className="flex flex-col md:flex-row items-center md:items-start justify-between space-y-4 md:space-y-0 md:space-x-4">
+          <div className="space-y-2 w-full md:w-1/2">
+            <p>抗炎食物占比: <span className="font-medium">{antiInflammatoryScore.toFixed(1)}%</span></p>
+            {antiInflammatoryScore < 50 && <p className="text-sm text-red-500">建议: 增加抗炎食物摄入。</p>}
+            {antiInflammatoryScore >= 50 && <p className="text-sm text-green-500">建议: 保持良好的抗炎饮食。</p>}
+          </div>
+          <div className="w-full md:w-1/2 h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: '抗炎食物', value: antiInflammatoryScore },
+                    { name: '非抗炎食物', value: 100 - antiInflammatoryScore },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  <Cell key="cell-0" fill="var(--primary-green)" />
+                  <Cell key="cell-1" fill="var(--accent-pink)" />
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
 

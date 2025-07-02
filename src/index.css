@@ -131,6 +131,49 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Liquid Fill Gauge Styles */
+.liquid-fill-gauge-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: var(--secondary); /* Background of the empty part */
+}
+
+.liquid-fill-gauge-liquid {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background-color: var(--primary-green); /* Default liquid color */
+  transition: height 0.5s ease-in-out; /* Smooth fill transition */
+}
+
+.liquid-fill-gauge-wave {
+  position: absolute;
+  top: -20px; /* Adjust to control wave height */
+  width: 200%; /* Double width for wave effect */
+  height: 40px; /* Wave height */
+  background-color: inherit; /* Inherit liquid color */
+  border-radius: 40%; /* Creates the wave shape */
+  animation: wave 5s linear infinite;
+}
+
+.liquid-fill-gauge-wave.wave-back {
+  animation: wave-back 5s linear infinite;
+  opacity: 0.8;
+}
+
+@keyframes wave {
+  0% { transform: translateX(0) rotate(0deg); }
+  100% { transform: translateX(-50%) rotate(360deg); }
+}
+
+@keyframes wave-back {
+  0% { transform: translateX(-50%) rotate(0deg); }
+  100% { transform: translateX(0) rotate(-360deg); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
