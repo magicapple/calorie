@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { LayoutDashboard, User, History, Package, Utensils, Database } from 'lucide-react'
 import Layout from './components/Layout'
 import PersonalProfile from './components/PersonalProfile'
+import ProfileHistoryViewer from './components/ProfileHistoryViewer'
 import MyPantry from './components/MyPantry'
 import DailyMealLogger from './components/DailyMealLogger'
 import Dashboard from './components/Dashboard'
@@ -15,6 +17,8 @@ function App() {
         return <Dashboard />;
       case 'profile':
         return <PersonalProfile />;
+      case 'profileHistory':
+        return <ProfileHistoryViewer />;
       case 'pantry':
         return <MyPantry />;
       case 'logger':
@@ -29,36 +33,60 @@ function App() {
   return (
     <Layout>
       <nav className="flex justify-around p-4 border-b bg-gray-100">
-        <button
+        <div
           onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 rounded-md ${activeTab === 'dashboard' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'dashboard' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
         >
-          仪表盘
-        </button>
-        <button
+          <LayoutDashboard className="w-6 h-6" />
+          <span className="text-xs mt-1">仪表盘</span>
+        </div>
+        <div
           onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 rounded-md ${activeTab === 'profile' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'profile' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
         >
-          个人档案
-        </button>
-        <button
+          <User className="w-6 h-6" />
+          <span className="text-xs mt-1">个人档案</span>
+        </div>
+        <div
+          onClick={() => setActiveTab('profileHistory')}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'profileHistory' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
+        >
+          <History className="w-6 h-6" />
+          <span className="text-xs mt-1">档案历史</span>
+        </div>
+        <div
           onClick={() => setActiveTab('pantry')}
-          className={`px-4 py-2 rounded-md ${activeTab === 'pantry' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'pantry' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
         >
-          我的食材库
-        </button>
-        <button
+          <Package className="w-6 h-6" />
+          <span className="text-xs mt-1">我的食材库</span>
+        </div>
+        <div
           onClick={() => setActiveTab('logger')}
-          className={`px-4 py-2 rounded-md ${activeTab === 'logger' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'logger' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
         >
-          饮食记录
-        </button>
-        <button
+          <Utensils className="w-6 h-6" />
+          <span className="text-xs mt-1">饮食记录</span>
+        </div>
+        <div
           onClick={() => setActiveTab('foodDatabase')}
-          className={`px-4 py-2 rounded-md ${activeTab === 'foodDatabase' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          className={`flex flex-col items-center justify-center w-16 h-16 rounded-full cursor-pointer transition-colors duration-200
+            ${activeTab === 'foodDatabase' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}
+          `}
         >
-          食材数据库
-        </button>
+          <Database className="w-6 h-6" />
+          <span className="text-xs mt-1">食材数据库</span>
+        </div>
       </nav>
       <div className="mt-4">
         {renderContent()}

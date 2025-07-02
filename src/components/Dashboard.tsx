@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getData, getByIndex } from '../lib/indexedDB';
+import { getData, addData, getByIndex } from '../lib/indexedDB';
 import type { PersonalProfileData } from '../types';
 import type { MealEntry } from '../types';
 import { calculateBMR, calculateTotalIntake, calculateMacronutrientRatios, checkProteinTarget, calculateAntiInflammatoryScore } from '../utils/calculations';
@@ -16,6 +16,22 @@ const Dashboard: React.FC = () => {
   const [profile, setProfile] = useState<PersonalProfileData | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [dailyMeals, setDailyMeals] = useState<MealEntry[]>([]);
+  const [greeting, setGreeting] = useState<string>('');
+  const [backgroundImage, setBackgroundImage] = useState<string>('');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting('早上好');
+      setBackgroundImage('/images/morning.jpg');
+    } else if (hour < 18) {
+      setGreeting('下午好');
+      setBackgroundImage('/images/afternoon.jpg');
+    } else {
+      setGreeting('晚上好');
+      setBackgroundImage('/images/evening.jpg');
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -51,7 +67,7 @@ const Dashboard: React.FC = () => {
   }, [selectedDate]);
 
   const totalIntake = calculateTotalIntake(dailyMeals);
-  const bmr = profile ? calculateBMR(profile) : 0;
+  const bmr = profile && profile.bmr !== "" && Number(profile.bmr) > 0 ? Number(profile.bmr) : (profile ? calculateBMR(profile) : 0);
   const totalExpenditure = bmr + (profile?.activeCalories ? Number(profile.activeCalories) : 0);
   const energyBalance = totalIntake.calories - totalExpenditure;
 
@@ -66,7 +82,12 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="p-4 space-y-6">
-      <h2 className="text-2xl font-bold text-center">健康仪表盘</h2>
+      <div className="relative w-full h-48 rounded-lg overflow-hidden mb-6">
+        <img src={backgroundImage} alt="氛围图片" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+          <h2 className="text-3xl font-bold text-white text-center">{greeting}</h2>
+        </div>
+      </div>
 
       {/* Date Picker */}
       <div className="flex justify-center mb-4">
@@ -119,7 +140,7 @@ const Dashboard: React.FC = () => {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Bar dataKey="value" fill="#8884d8" />
+              <Bar dataKey="value" fill="var(--primary-green)" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -146,7 +167,7 @@ const Dashboard: React.FC = () => {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Bar dataKey="value" fill="#82ca9d" />
+              <Bar dataKey="value" fill="var(--accent-blue)" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -175,8 +196,8 @@ const Dashboard: React.FC = () => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                <Cell key="cell-0" fill="#82ca9d" />
-                <Cell key="cell-1" fill="#FF8042" />
+                <Cell key="cell-0" fill="var(--primary-green)" />
+                <Cell key="cell-1" fill="var(--accent-pink)" />
               </Pie>
               <Tooltip />
               <Legend />
