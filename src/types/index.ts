@@ -17,11 +17,19 @@ export interface FoodItem {
 }
 
 export interface MealEntry {
+  id: string; // Use timestamp as a unique ID
   food: FoodItem;
   quantityGrams: number;
+  quantityUnits: number;
+  unit: "grams" | "units";
   mealType: "breakfast" | "lunch" | "dinner" | "snack";
   timestamp: number;
   date: string;
+  pantryDeductions: {
+    batchId: string;
+    consumedUnits: number;
+    consumedGrams: number;
+  }[];
 }
 
 export interface PersonalProfileData {

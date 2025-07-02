@@ -3,6 +3,7 @@ import {
   addData,
   getAllData,
   updateData,
+  deleteData,
   getByIndex,
   getData,
 } from "../lib/indexedDB";
@@ -14,8 +15,9 @@ import type {
 } from "../types";
 import { foodDatabase } from "../data/foodDatabase";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button"; // Import Button
 import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, X } from "lucide-react"; // Import X icon
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -24,15 +26,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// Food categories for filtering
 const foodCategories = [
   "所有类别",
-  "蔬菜",
-  "水果",
-  "肉类",
-  "主食",
-  "油脂",
-  "其他",
+  ...new Set(foodDatabase.map((food) => food.category)),
 ];
 
 const DailyMealLogger: React.FC = () => {
@@ -43,17 +39,74 @@ const DailyMealLogger: React.FC = () => {
   const [inputQuantity, setInputQuantity] = useState<number | "">("");
   const [inputUnit, setInputUnit] = useState<"grams" | "units">("grams");
   const [inputGrams, setInputGrams] = useState<number | "">("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("所有类别"); // New state for selected category
+  const [selectedCategory, setSelectedCategory] = useState<string>("所有类别");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
   const [dailyMeals, setDailyMeals] = useState<MealEntry[]>([]);
   const [pantry, setPantry] = useState<PantryBatch[]>([]);
   const [recentFoods, setRecentFoods] = useState<RecentFoodEntry[]>([]);
 
   useEffect(() => {
+    if (selectedFood && inputUnit === "units" && inputQuantity !== "") {
+      const quantity = Number(inputQuantity);
+      const relevantBatches = pantry.filter(
+        (batch) =>
+          batch.foodId === selectedFood.id && batch.remainingQuantityInUnits > 0
+      );
+
+      if (relevantBatches.length > 0) {
+        const totalGrams = relevantBatches.reduce(
+          (sum, batch) => sum + batch.initialWeightInGrams,
+          0
+        );
+        const totalUnits = relevantBatches.reduce(
+          (sum, batch) => sum + batch.initialQuantityInUnits,
+          0
+        );
+        const averageGramsPerUnit =
+          totalUnits > 0 ? totalGrams / totalUnits : 0;
+
+        setInputGrams(
+          parseFloat((quantity * averageGramsPerUnit).toFixed(2))
+        );
+      } else {
+        setInputGrams("");
+      }
+    } else {
+      setInputGrams("");
+    }
+  }, [selectedFood, inputQuantity, inputUnit, pantry]);
+
+  useEffect(() => {
     const loadData = async () => {
       try {
-        // Load daily meals for selected date
+        // --- One-time data migration for meal entries ---
+        const migrationKey = 'meal-id-migration-v1-done';
+        const migrationDone = localStorage.getItem(migrationKey);
+
+        if (!migrationDone) {
+          console.log("Running one-time meal ID migration...");
+          const allMeals = await getAllData<MealEntry>('mealEntries');
+          let migrationCount = 0;
+          for (const meal of allMeals) {
+            if (!meal.id || typeof meal.id !== 'string') {
+              meal.id = meal.timestamp.toString();
+              // Ensure pantryDeductions exists to match the new type
+              if (!meal.pantryDeductions) {
+                meal.pantryDeductions = [];
+              }
+              await updateData('mealEntries', meal);
+              migrationCount++;
+            }
+          }
+          if (migrationCount > 0) {
+            console.log(`Migration complete. Updated ${migrationCount} meal entries.`);
+          } else {
+            console.log("No meal entries needed migration.");
+          }
+          localStorage.setItem(migrationKey, 'true');
+        }
+
+        // Now, load the data for the selected date
         const dateString = format(selectedDate, "yyyy-MM-dd");
         const meals = await getByIndex<MealEntry>(
           "mealEntries",
@@ -62,70 +115,15 @@ const DailyMealLogger: React.FC = () => {
         );
         setDailyMeals(meals);
 
-        // Load pantry data
         const loadedPantry = await getAllData<PantryBatch>("pantryBatches");
         setPantry(loadedPantry);
 
-        // Load recent foods for current meal type
         const recent = await getByIndex<RecentFoodEntry>(
           "recentFoods",
           "mealTypeIndex",
           mealType
         );
-        setRecentFoods(recent.sort((a, b) => b.lastUsed - a.lastUsed)); // Sort by lastUsed descending
-
-        // --- Migration from localStorage (Daily Meals) ---
-        const localStorageDailyMealsKey = `dailyMeals_${dateString}`;
-        const localStorageDailyMeals = localStorage.getItem(
-          localStorageDailyMealsKey
-        );
-        if (localStorageDailyMeals) {
-          const parsedMeals: MealEntry[] = JSON.parse(localStorageDailyMeals);
-          for (const meal of parsedMeals) {
-            await addData("mealEntries", meal);
-          }
-          setDailyMeals(parsedMeals);
-          localStorage.removeItem(localStorageDailyMealsKey);
-        }
-
-        // --- Migration from localStorage (Pantry) ---
-        const localStoragePantry = localStorage.getItem("myPantry");
-        if (localStoragePantry) {
-          const parsedPantry: PantryBatch[] = JSON.parse(localStoragePantry);
-          for (const batch of parsedPantry) {
-            await addData("pantryBatches", batch);
-          }
-          setPantry(parsedPantry);
-          localStorage.removeItem("myPantry");
-        }
-
-        // --- Migration from localStorage (Recent Foods) ---
-        const localStorageRecentFoods = localStorage.getItem("recentFoods");
-        if (localStorageRecentFoods) {
-          const parsedRecentFoods: {
-            foodId: string;
-            quantity: number;
-            unit: "grams" | "units";
-          }[] = JSON.parse(localStorageRecentFoods);
-          for (const recent of parsedRecentFoods) {
-            await updateData("recentFoods", {
-              id: `${mealType}_${recent.foodId}`,
-              mealType: mealType,
-              foodId: recent.foodId,
-              quantity: recent.quantity,
-              unit: recent.unit,
-              lastUsed: Date.now(),
-            });
-          }
-          // Reload recent foods from IndexedDB after migration
-          const updatedRecent = await getByIndex<RecentFoodEntry>(
-            "recentFoods",
-            "mealTypeIndex",
-            mealType
-          );
-          setRecentFoods(updatedRecent.sort((a, b) => b.lastUsed - a.lastUsed));
-          localStorage.removeItem("recentFoods");
-        }
+        setRecentFoods(recent.sort((a, b) => b.lastUsed - a.lastUsed));
       } catch (error) {
         console.error("Error loading data from IndexedDB:", error);
       }
@@ -133,21 +131,8 @@ const DailyMealLogger: React.FC = () => {
     loadData();
   }, [selectedDate, mealType]);
 
-  useEffect(() => {
-    const savePantry = async () => {
-      try {
-        // Pantry updates are handled directly in handleAddMeal and handleSpoilFood
-        // No need to save the entire pantry state here
-      } catch (error) {
-        console.error("Error saving pantry to IndexedDB:", error);
-      }
-    };
-    savePantry();
-  }, [pantry]);
-
   const availableFoodsInPantry = React.useMemo(() => {
     const availableFoodIds = new Set<string>();
-
     pantry.forEach((batch) => {
       if (batch.remainingQuantityInUnits > 0) {
         availableFoodIds.add(batch.foodId);
@@ -172,24 +157,26 @@ const DailyMealLogger: React.FC = () => {
     let totalGramsConsumed: number;
 
     if (inputUnit === "grams") {
-      if (inputQuantity === "") return; // 必须输入克数
+      if (inputQuantity === "") return;
       quantityToConsumeUnits = Number(inputQuantity);
       totalGramsConsumed = Number(inputQuantity);
     } else {
-      // inputUnit === "units"
-      if (inputQuantity === "" || inputGrams === "") return; // 必须输入数量和总克数
+      if (inputQuantity === "" || inputGrams === "") return;
       quantityToConsumeUnits = Number(inputQuantity);
       totalGramsConsumed = Number(inputGrams);
     }
 
     let remainingQuantityToConsumeUnits = quantityToConsumeUnits;
 
-    // FIFO consumption
     try {
-      const updatedPantry = [...pantry]; // Use current pantry state
+      const updatedPantry = [...pantry];
       const batchesToUpdate: PantryBatch[] = [];
+      const pantryDeductions: {
+        batchId: string;
+        consumedUnits: number;
+        consumedGrams: number;
+      }[] = [];
 
-      // Sort batches by timestamp (assuming ID is timestamp-based for FIFO)
       const sortedBatches = updatedPantry
         .filter(
           (batch) =>
@@ -216,33 +203,34 @@ const DailyMealLogger: React.FC = () => {
         remainingQuantityToConsumeUnits -= consumeFromThisBatchUnits;
 
         batchesToUpdate.push(batch);
+        pantryDeductions.push({
+          batchId: batch.id,
+          consumedUnits: consumeFromThisBatchUnits,
+          consumedGrams: consumeFromThisBatchGrams,
+        });
       }
 
       if (remainingQuantityToConsumeUnits > 0) {
         alert("食材库中数量不足！");
-        return; // Revert changes if not enough stock
+        return;
       }
 
-      // Update pantry in IndexedDB
       for (const batch of batchesToUpdate) {
         await updateData("pantryBatches", batch);
       }
-      setPantry(
-        updatedPantry.filter(
-          (batch) =>
-            batch.remainingQuantityInUnits > 0 ||
-            batch.consumedQuantityInUnits > 0 ||
-            batch.spoiledQuantityInUnits > 0
-        )
-      ); // Update local state
+      setPantry(updatedPantry);
 
-      // Add to daily meals
+      const timestamp = Date.now();
       const newMealEntry: MealEntry = {
+        id: timestamp.toString(),
         food: selectedFood,
         quantityGrams: totalGramsConsumed,
+        quantityUnits: quantityToConsumeUnits,
+        unit: inputUnit,
         mealType,
-        timestamp: Date.now(),
+        timestamp,
         date: format(selectedDate, "yyyy-MM-dd"),
+        pantryDeductions,
       };
       await addData("mealEntries", newMealEntry);
       setDailyMeals((prevMeals) => [...prevMeals, newMealEntry]);
@@ -251,7 +239,6 @@ const DailyMealLogger: React.FC = () => {
       setInputQuantity("");
       setInputGrams("");
 
-      // Record recent food
       const recentFoodId = `${mealType}_${selectedFood.id}`;
       const existingRecentFood = await getData<RecentFoodEntry>(
         "recentFoods",
@@ -271,7 +258,6 @@ const DailyMealLogger: React.FC = () => {
       } else {
         await addData("recentFoods", newRecentEntry);
       }
-      // Reload recent foods from IndexedDB after update
       const updatedRecent = await getByIndex<RecentFoodEntry>(
         "recentFoods",
         "mealTypeIndex",
@@ -281,6 +267,56 @@ const DailyMealLogger: React.FC = () => {
     } catch (error) {
       console.error("Error adding meal:", error);
       alert("添加饮食记录失败！");
+    }
+  };
+
+  const handleDeleteMeal = async (mealId: string) => {
+    console.log("Attempting to delete meal with ID:", mealId);
+    try {
+      const mealToDelete = dailyMeals.find(
+        (meal) => (meal.id || meal.timestamp.toString()) === mealId
+      );
+
+      console.log("Found meal to delete:", mealToDelete);
+      if (!mealToDelete) {
+        console.error("Meal not found in state!");
+        return;
+      }
+
+      // Only revert pantry deductions if they exist (for new meal entries)
+      if (mealToDelete.pantryDeductions && Array.isArray(mealToDelete.pantryDeductions)) {
+        const updatedPantry = [...pantry];
+        const batchesToUpdateInDB: PantryBatch[] = [];
+
+        for (const deduction of mealToDelete.pantryDeductions) {
+          const batch = updatedPantry.find((b) => b.id === deduction.batchId);
+          if (batch) {
+            batch.remainingQuantityInUnits += deduction.consumedUnits;
+            batch.remainingWeightInGrams += deduction.consumedGrams;
+            batch.consumedQuantityInUnits -= deduction.consumedUnits;
+            batch.consumedWeightInGrams -= deduction.consumedGrams;
+            batchesToUpdateInDB.push(batch);
+          }
+        }
+
+        for (const batch of batchesToUpdateInDB) {
+          await updateData("pantryBatches", batch);
+        }
+
+        setPantry(updatedPantry);
+      }
+
+      const keyToDelete = mealToDelete.id || mealToDelete.timestamp.toString();
+      console.log("Deleting from IndexedDB with key:", keyToDelete);
+      await deleteData("mealEntries", keyToDelete);
+
+      // Update local state
+      setDailyMeals(dailyMeals.filter((meal) => (meal.id || meal.timestamp.toString()) !== mealId));
+      console.log("Meal deleted from local state.");
+
+    } catch (error) {
+      console.error("Error deleting meal:", error);
+      alert("删除饮食记录失败！");
     }
   };
 
@@ -305,7 +341,8 @@ const DailyMealLogger: React.FC = () => {
       <div className="flex justify-center mb-4">
         <Popover>
           <PopoverTrigger asChild>
-            <button
+            <Button
+              variant={"outline"}
               className={cn(
                 "w-[280px] justify-start text-left font-normal",
                 !selectedDate && "text-muted-foreground"
@@ -317,20 +354,13 @@ const DailyMealLogger: React.FC = () => {
               ) : (
                 <span>选择日期</span>
               )}
-            </button>
+            </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={(date) => {
-                setSelectedDate(date || new Date());
-                const dateString = format(date || new Date(), "yyyy-MM-dd");
-                const savedMeals = localStorage.getItem(
-                  `dailyMeals_${dateString}`
-                );
-                setDailyMeals(savedMeals ? JSON.parse(savedMeals) : []);
-              }}
+              onSelect={(date) => setSelectedDate(date || new Date())}
               initialFocus
             />
           </PopoverContent>
@@ -339,38 +369,30 @@ const DailyMealLogger: React.FC = () => {
 
       {/* Meal Type Selection */}
       <div className="flex space-x-2">
-        <button
+        <Button
           onClick={() => setMealType("breakfast")}
-          className={`px-4 py-2 rounded-md ${
-            mealType === "breakfast" ? "bg-blue-500 text-white" : "bg-gray-200"
-          }`}
+          variant={mealType === "breakfast" ? "default" : "outline"}
         >
           早餐
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => setMealType("lunch")}
-          className={`px-4 py-2 rounded-md ${
-            mealType === "lunch" ? "bg-blue-500 text-white" : "bg-gray-200"
-          }`}
+          variant={mealType === "lunch" ? "default" : "outline"}
         >
           午餐
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => setMealType("dinner")}
-          className={`px-4 py-2 rounded-md ${
-            mealType === "dinner" ? "bg-blue-500 text-white" : "bg-gray-200"
-          }`}
+          variant={mealType === "dinner" ? "default" : "outline"}
         >
           晚餐
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => setMealType("snack")}
-          className={`px-4 py-2 rounded-md ${
-            mealType === "snack" ? "bg-blue-500 text-white" : "bg-gray-200"
-          }`}
+          variant={mealType === "snack" ? "default" : "outline"}
         >
           加餐
-        </button>
+        </Button>
       </div>
 
       {/* Add Food to Meal Form */}
@@ -378,26 +400,20 @@ const DailyMealLogger: React.FC = () => {
         <h3 className="text-lg font-medium">
           添加食物到 {getMealTypeDisplayName(mealType)}
         </h3>
-        {/* Category Selector */}
         <div className="flex space-x-2 overflow-x-auto pb-2">
           {foodCategories.map((category) => (
-            <button
+            <Button
               key={category}
-              onClick={() => {
-                setSelectedCategory(category);
-              }}
-              className={`px-3 py-1 rounded-full text-sm ${
-                selectedCategory === category
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 text-gray-700"
-              }`}
+              variant={selectedCategory === category ? "default" : "secondary"}
+              size="sm"
+              onClick={() => setSelectedCategory(category)}
+              className="rounded-full"
             >
               {category}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {/* Recently Used Foods */}
         {!selectedFood && (
           <div className="space-y-2">
             {recentFoods.length > 0 && (
@@ -410,18 +426,20 @@ const DailyMealLogger: React.FC = () => {
                     );
                     if (!food) return null;
                     return (
-                      <button
-                        key={recent.foodId}
+                      <Button
+                        key={recent.id}
+                        variant="outline"
+                        size="sm"
                         onClick={() => {
                           setSelectedFood(food);
                           setInputQuantity(recent.quantity);
                           setInputUnit(recent.unit);
                         }}
-                        className="px-3 py-1 rounded-full text-sm bg-gray-100 hover:bg-gray-200"
+                        className="rounded-full"
                       >
-                        {food.name} ({recent.quantity}{" "}
+                        {food.name} ({recent.quantity}
                         {recent.unit === "grams" ? "克" : food.default_unit})
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -437,7 +455,7 @@ const DailyMealLogger: React.FC = () => {
                       setSelectedFood(food);
                       setInputUnit(
                         food.default_unit === "克" ||
-                          food.default_unit === "毫升"
+                        food.default_unit === "毫升"
                           ? "grams"
                           : "units"
                       );
@@ -512,12 +530,9 @@ const DailyMealLogger: React.FC = () => {
                   />
                 </div>
               )}
-            <button
-              onClick={handleAddMeal}
-              className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+            <Button onClick={handleAddMeal} className="w-full">
               添加
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -525,7 +540,7 @@ const DailyMealLogger: React.FC = () => {
       {/* Daily Meals List */}
       <div className="border rounded-lg p-4 shadow-sm">
         <h3 className="text-lg font-medium">
-          {format(selectedDate, "yyyy年MM月dd日")} -{" "}
+          {format(selectedDate, "yyyy年MM月dd日")} - {" "}
           {getMealTypeDisplayName(mealType)} 饮食记录
         </h3>
         {dailyMeals.filter((meal) => meal.mealType === mealType).length ===
@@ -535,17 +550,28 @@ const DailyMealLogger: React.FC = () => {
           <ul className="divide-y divide-gray-200">
             {dailyMeals
               .filter((meal) => meal.mealType === mealType)
-              .map((meal, index) => (
+              .map((meal) => (
                 <li
-                  key={index}
+                  key={meal.id || meal.timestamp} // Use timestamp as fallback key for old data
                   className="py-3 flex justify-between items-center"
                 >
                   <div>
                     <p className="font-medium">{meal.food.name}</p>
                     <p className="text-sm text-gray-600">
-                      {meal.quantityGrams.toFixed(0)} 克
+                      {meal.unit === "units" && meal.quantityUnits
+                        ? `${(meal.quantityUnits || 0).toFixed(1)} ${
+                            meal.food.default_unit
+                          } (${(meal.quantityGrams || 0).toFixed(0)} 克)`
+                        : `${(meal.quantityGrams || 0).toFixed(0)} 克`}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteMeal(meal.id || meal.timestamp.toString())} // Handle old data without id
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </li>
               ))}
           </ul>
